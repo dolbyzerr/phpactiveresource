@@ -44,6 +44,7 @@
  * @version 0.14 beta
  * @license http://opensource.org/licenses/lgpl-2.1.php
  */
+mb_internal_encoding("UTF-8");
 class ActiveResource {
 	/**
 	 * The REST site address, e.g., http://user:pass@domain:port/
@@ -316,21 +317,22 @@ class ActiveResource {
 			$res .= '</' . $k . ">\n";
 		}
 		$res = str_replace ('<' . $k . '{{attributes}}>', '<' . $k . $attrs . '>', $res);
+		$res = str_replace ('DEL_ME', '', $res);
 		return $res;
 	}
 
 	/**
 	 * Converts entities to unicode entities (ie. < becomes &#60;).
 	 * From php.net/htmlentities comments, user "webwurst at web dot de"
+	 * Now with UTF!	
 	 */
-	function _xml_entities ($string) {
-		$trans = get_html_translation_table (HTML_ENTITIES);
-	
-		foreach ($trans as $key => $value) {
-			$trans[$key] = '&#' . ord ($key) . ';';
+	function _xml_entities($string){
+		$i = 0;
+		$result = "";
+		for($i=0;$i!=mb_strlen($string);$i++){
+			$result .= '&#'.$this->_ordUTF8(mb_substr($string, $i, 1)).";";
 		}
-	
-		return strtr ($string, $trans);
+		return $result;
 	}
 
 	/**
@@ -347,7 +349,7 @@ class ActiveResource {
 			}
 			$params = substr ($params, 1);
 		} elseif ($this->request_format == 'xml') {
-			$params = '<?xml version="1.0" encoding="UTF-8"?><' . $el . ">\n";
+			$params = '<?xml version="1.0" encoding="UTF-8"?>\n<' . $el . ">\n";
 			foreach ($data as $k => $v) {
 				if ($k != 'id' && $k != 'created-at' && $k != 'updated-at') {
 					$params .= $this->_build_xml ($k, $v);
@@ -390,7 +392,7 @@ class ActiveResource {
 				return $this;
 			}
 		}
-
+		
 		// parse XML response
 		$xml = new SimpleXMLElement ($res);
 
@@ -530,6 +532,46 @@ class ActiveResource {
 		}
 		return $this;
 	}
+	
+	/**
+	 * Function that returns UTF char number
+	 * function was copied from http://php.net/htmlentities comments
+	 */
+	function _ordUTF8($c, $index = 0, &$bytes = null)
+	{
+	  $len = strlen($c);
+	  $bytes = 0;
+
+	  if ($index >= $len)
+	    return false;
+
+	  $h = ord($c{$index});
+
+	  if ($h <= 0x7F) {
+	    $bytes = 1;
+	    return $h;
+	  }
+	  else if ($h < 0xC2)
+	    return false;
+	  else if ($h <= 0xDF && $index < $len - 1) {
+	    $bytes = 2;
+	    return ($h & 0x1F) <<  6 | (ord($c{$index + 1}) & 0x3F);
+	  }
+	  else if ($h <= 0xEF && $index < $len - 2) {
+	    $bytes = 3;
+	    return ($h & 0x0F) << 12 | (ord($c{$index + 1}) & 0x3F) << 6
+	                             | (ord($c{$index + 2}) & 0x3F);
+	  }          
+	  else if ($h <= 0xF4 && $index < $len - 3) {
+	    $bytes = 4;
+	    return ($h & 0x0F) << 18 | (ord($c{$index + 1}) & 0x3F) << 12
+	                             | (ord($c{$index + 2}) & 0x3F) << 6
+	                             | (ord($c{$index + 3}) & 0x3F);
+	  }
+	  else
+	    return false;
+	}
+	
 }
 
 /** TODO: Replace with a proper set of tests.
